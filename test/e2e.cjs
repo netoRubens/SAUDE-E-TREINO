@@ -1,0 +1,115 @@
+// E2E: node test/e2e.cjs   (precisa de playwright + Chromium; sobe um servidor estático local)
+let pw;try{pw=require('playwright')}catch{pw=require('/opt/npm-tools/node_modules/playwright')}
+const http=require('http'),fs=require('fs'),path=require('path');
+const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png'};
+const srv=http.createServer((q,r)=>{let p=decodeURIComponent(q.url.split('?')[0]);if(p==='/')p='/index.html';const f=path.join(ROOT,p);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);return r.end()}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(r)});
+let pass=0,fail=0;const results=[];
+const ok=(c,m)=>{if(c){pass++;results.push('  ✓ '+m)}else{fail++;results.push('  ✗ FALHOU: '+m)}};
+const ymd=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const add=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
+async function fillForm(page,vals,expectClose=true){for(const [k,v] of Object.entries(vals)){const el=page.locator(`.sheet [name="${k}"]`);const t=await el.evaluate(e=>e.tagName);if(t==='SELECT')await el.selectOption(String(v));else await el.fill(String(v))}
+ await page.click('.sheet button[type=submit]');if(expectClose){await page.waitForSelector('.modal',{state:'detached',timeout:4000});await page.waitForTimeout(80)}else{await page.waitForTimeout(150);const e=await page.locator('.sheet .err').textContent();await page.click('.sheet [data-x]');return e}}
+const go=async(page,h)=>{await page.evaluate(h=>{location.hash=h},h);await page.waitForTimeout(120)};
+const body=page=>page.locator('main').innerText();
+async function run(name,ctxOpts){
+ results.push(`\n== ${name} ==`);
+ const browser=await pw.chromium.launch();const ctx=await browser.newContext({acceptDownloads:true,...ctxOpts});const page=await ctx.newPage();const _c=page.click.bind(page);page.click=async(...a)=>{const r=await _c(...a);await page.waitForTimeout(150);return r};
+ const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/404/.test(m.text()))errs.push(m.text())});
+ const base='http://localhost:8123/index.html';await page.goto(base);await page.waitForSelector('h1');
+ const mobile=!!ctxOpts.isMobile;
+ ok(await page.locator(mobile?'#tabs':'#side').isVisible()&&!await page.locator(mobile?'#side':'#tabs').isVisible(),mobile?'navegação inferior (mobile) visível, lateral oculta':'navegação lateral (desktop) visível, inferior oculta');
+ // Seed da planilha
+ await go(page,'#/treino');await page.click('[data-a=tday][aria-label*="terça"]');let t=await body(page);
+ ok(/Força A/.test(t)&&/Agachamento/.test(t)&&/Flexão apoiada/.test(t)&&/Elevação de quadril/.test(t)&&/Prancha/.test(t)&&/2x10/.test(t)&&/2x15s/.test(t),'Terça = Força A com exercícios e prescrições da planilha');
+ ok(/Planilha: Força A: agachamento 2x10/.test(t),'texto original da planilha preservado');
+ await page.click('[data-a=tday][aria-label*="sexta"]');t=await body(page);
+ ok(/Força B/.test(t)&&/Afundo com apoio/.test(t)&&/Superman/.test(t)&&/Panturrilha/.test(t)&&/Prancha lateral/.test(t),'Sexta = Força B completa');
+ await page.click('[data-a=tday][aria-label*="quarta"]');ok(/Caminhada/.test(await body(page)),'Quarta = Caminhada');
+ await page.click('[data-a=tday][aria-label*="sábado"]');ok(/Corda \(opcional\)/.test(await body(page)),'Sábado = Caminhada + corda opcional');
+ // Perfil
+ await go(page,'#/perfil');await page.click('[data-a=editProfile]');
+ const e0=await fillForm(page,{name:'',age:'30',height:'170',weight:'70',sex:'f',activity:'moderado'},false);ok(/Nome: obrigatório/.test(e0),'validação: nome obrigatório');
+ await page.click('[data-a=editProfile]');const e1=await fillForm(page,{name:'Ana',age:'5',height:'170',weight:'70'},false);ok(/Idade/.test(e1),'validação: idade fora do intervalo');
+ await page.click('[data-a=editProfile]');await fillForm(page,{name:'Ana',age:'30',height:'170',weight:'70',sex:'f',activity:'moderado',experience:'iniciante',freq:'3',limits:'joelho sensível'});
+ t=await body(page);ok(/Ana/.test(t)&&/joelho sensível/.test(t),'perfil salvo');
+ ok(/1452/.test(t)&&/2250/.test(t),'cálculo: TMB Mifflin 1452 e gasto 2250 kcal (30a, 170cm, 70kg, F, moderado)');
+ await page.reload();await page.waitForSelector('h1');ok(/Ana/.test(await body(page)),'perfil persiste após recarregar');
+ // Perfil incompleto → explica faltas
+ // Peso
+ await go(page,'#/peso');t=await body(page);ok(/Próxima pesagem/.test(t)&&t.includes(String(new Date(Date.now()+7*864e5).getDate())),'mostra próxima data de pesagem (+7 dias)');
+ await page.click('[data-a=addW]');await page.waitForTimeout(150);ok(await page.locator('.modal').count()===0&&/Bloqueado/.test(await page.locator('#toast').textContent()),'bloqueia pesagem antecipada');
+ ok(!!(await page.locator('table').count()),'histórico de peso exibido');
+ await page.click('[data-a=wInterval]');const e2=await fillForm(page,{d:'5'},false);ok(/entre 7/.test(e2),'intervalo mínimo de 7 dias imposto');
+ await page.click('[data-a=wInterval]');await fillForm(page,{d:'10'});ok(/10 dias/.test(await body(page)),'intervalo editável (10 dias)');
+ await page.click('[data-a=wInterval]');await fillForm(page,{d:'7'});
+ // injeta uma pesagem antiga por IndexedDB (via API do app) para testar edição cronológica
+ await page.evaluate(async d=>{await db.weights.add({date:d,kg:72,note:''})},add(-20));await page.reload();await page.waitForSelector('h1');
+ const ed=page.locator('[data-a=editW]').first();await ed.click();const e3=await fillForm(page,{date:add(-15)},false);ok(/7\+ dias após/.test(e3),'edição respeita 7 dias da pesagem anterior');
+ await page.locator('[data-a=editW]').first().click();await fillForm(page,{date:add(-10),kg:'69,5'});ok(/69\.5/.test(await body(page)),'correção de pesagem válida aceita (vírgula decimal)');
+ // Alimentos / dieta
+ await go(page,'#/dieta');await page.click('[data-a=addFood]');await fillForm(page,{name:'Arroz cozido',ref:'100',kcal:'130',p:'2.5',c:'28',f:'0.3',portion:'colher de servir',portionQty:'50'});
+ await page.click('[data-a=addFood]');const e4=await fillForm(page,{name:'Ruim',kcal:'-5',p:'1',c:'1',f:'1'},false);ok(/Calorias/.test(e4),'validação: calorias negativas rejeitadas');
+ await page.click('[data-a=addPlan][data-k=almoco]');await fillForm(page,{qty:'200'});
+ t=await body(page);ok(/Arroz cozido/.test(t)&&/200 g · 260 kcal/.test(t),'item no plano com cálculo 260 kcal');
+ await page.click('[data-a=editPlan]');await fillForm(page,{qty:'100'});ok(/100 g · 130 kcal/.test(await body(page)),'editar quantidade no plano');
+ await page.click('[data-a=addPlan][data-k=almoco]');await fillForm(page,{qty:'',por:'2'});ok(/100 g · 130 kcal/.test(await body(page))&&(await page.locator('.li:has-text("Arroz cozido")').count())>=2,'porção personalizada (2 × 50 g) soma');
+ await page.click('[data-a=copyMeal][data-k=almoco]');const other=(new Date().getDay()+1)%7;await fillForm(page,{to:String(other)});
+ await page.click(`[data-a=dwd][data-i="${other}"]`);ok(/Arroz cozido/.test(await page.locator('section:has(h2:text-is("Almoço"))').innerText()),'copiar refeição para outro dia');
+ await page.click(`[data-a=dwd][data-i="${new Date().getDay()}"]`);
+ await page.click('[data-a=eatMeal][data-k=almoco]');await page.waitForTimeout(150);
+ await go(page,'#/hoje');t=await body(page);ok(/260 \/ 2242/.test(t.replace(/\s+/g,' ')),'dashboard: consumo 260 de meta 2242 kcal (meta recalculada com o peso corrigido de 69,5 kg) vem do módulo real');
+ // Treino execução
+ await go(page,'#/treino');await page.click(`[data-a=tday][data-d="${ymd()}"]`);
+ const today=new Date().getDay();const hasEx=await page.locator('[data-a=tick]').count();
+ if(hasEx){await page.locator('[data-a=tick]').first().click();await page.waitForTimeout(150);await page.locator('input[data-f=actual]').first().fill('2x6');await page.locator('input[data-f=actual]').first().blur();await page.locator('input[data-f=load]').first().fill('12');await page.locator('input[data-f=load]').first().blur();await page.waitForTimeout(200);
+  await page.reload();await page.waitForSelector('h1');ok(await page.locator('[data-a=tick]').first().getAttribute('aria-pressed')==='true'&&await page.locator('input[data-f=actual]').first().inputValue()==='2x6'&&await page.locator('input[data-f=load]').first().inputValue()==='12','treino executado (check + realizado + carga) persiste após recarregar');
+  ok(/Planejado/.test(await body(page))&&await page.locator('input[data-f=actual]').count()>0,'planejado separado do executado');}
+ await page.click('[data-a=plan_on]');await page.locator('[data-a=addEx]').first().click();await fillForm(page,{name:'Exercício novo',plan:'3x10'});ok(/Exercício novo/.test(await body(page)),'adicionar exercício ao plano');
+ await page.locator('[data-a=delEx]').last().click();await page.click('[data-y]');await page.waitForTimeout(150);ok(!/Exercício novo/.test(await body(page)),'remover exercício pede confirmação');
+ // Água, passos, hábitos
+ await go(page,'#/diario');await page.click('[data-a=addWater][data-ml="300"]');await page.click('[data-a=addWater][data-ml="500"]');ok(/800\s*\/ 2000 ml/.test((await body(page)).replace(/\s+/g,' ')),'água: botões rápidos somam 800 ml');
+ await page.click('[data-a=editWater]');await fillForm(page,{ml:'250'});ok(/750\s*\/ 2000/.test((await body(page)).replace(/\s+/g,' ')),'editar registro de água');
+ await page.click('[data-a=editSteps][data-date]');await fillForm(page,{steps:'5200'});ok(/5200/.test(await body(page)),'passos registrados');
+ await page.click('[data-a=editSteps][data-date]');await fillForm(page,{steps:'6000'});ok(/6000/.test(await body(page))&&!/5200/.test(await body(page)),'passos corrigidos');
+ ok(/Fiz refeições regulares e completas/.test(await body(page))&&/Passeei com meu cachorro/.test(await body(page)),'hábitos da planilha presentes');
+ const hc=page.locator('.hc').last();ok(await hc.getAttribute('data-s')==='','dia sem registro = não registrado');await hc.click();await page.waitForTimeout(200);ok(await page.locator('.hc').last().getAttribute('data-s')==='1','hábito marcado como feito');await page.locator('.hc').last().click();await page.waitForTimeout(200);ok(await page.locator('.hc').last().getAttribute('data-s')==='0','segundo toque = não feito');
+ await page.locator('.hc').last().click();await page.waitForTimeout(200);ok(await page.locator('.hc').last().getAttribute('data-s')==='','terceiro toque volta a não registrado');await page.locator('.hc').last().click();await page.waitForTimeout(200);
+ await page.click('[data-a=addHabit]');await fillForm(page,{name:'Alongar 5 min'});ok(/Alongar 5 min/.test(await body(page)),'hábito personalizado criado');
+ // Metas
+ await go(page,'#/perfil');await page.click('[data-a=addGoal]');await fillForm(page,{title:'Chegar a 65 kg',kind:'peso',unit:'kg',target:'65'});
+ t=await body(page);ok(/Chegar a 65 kg/.test(t),'meta criada');await page.click('[data-a=goalSt]');ok(/pausada/.test(await body(page)),'meta pausada');await page.click('[data-a=goalSt]');
+ await page.click('[data-a=editGoal]');await fillForm(page,{title:'Chegar a 66 kg',target:'66'});ok(/66 kg/.test(await body(page)),'meta editada');
+ // Dashboard e evolução
+ await go(page,'#/hoje');t=(await body(page)).replace(/\s+/g,' ');ok(/750 \/ 2000 ml/.test(t)&&/6000 \/ 8000/.test(t)&&/Chegar a 66 kg/.test(t),'dashboard reflete água, passos e metas reais');
+ await go(page,'#/evolucao');ok(await page.locator('svg.ch').count()>=3,'gráficos de evolução renderizados');await page.selectOption('[data-c=range]','7');await page.waitForTimeout(100);ok(await page.locator('svg.ch').count()>=1,'filtro de período funciona');
+ // Responsividade: sem rolagem horizontal
+ let over=[];for(const h of ['hoje','treino','dieta','diario','peso','evolucao','perfil']){await go(page,'#/'+h);const w=await page.evaluate(()=>[document.documentElement.scrollWidth,innerWidth]);if(w[0]>w[1]+1)over.push(h+':'+w.join('>'))}
+ ok(!over.length,'sem overflow horizontal em todas as telas '+over.join(','));
+ // Backup / restauração
+ await go(page,'#/perfil');const [dl]=await Promise.all([page.waitForEvent('download'),page.click('[data-a=export]')]);const fp='/tmp/backup-'+name.replace(/\W/g,'')+'.json';await dl.saveAs(fp);const bj=JSON.parse(fs.readFileSync(fp,'utf8'));
+ ok(bj.app==='saude-e-treino'&&bj.tables.weights.length===2&&bj.tables.foods.length===1&&bj.tables.water.length===2,'backup JSON exportado com os dados');
+ await go(page,'#/diario');await page.click('[data-a=addWater][data-ml="500"]');ok(/1250/.test(await body(page)),'(mutação após backup)');
+ await go(page,'#/perfil');await page.setInputFiles('input[data-c=import]',fp);await page.waitForSelector('[data-y]');await page.click('[data-y]');await page.waitForTimeout(300);
+ await go(page,'#/diario');ok(/750\s*\/ 2000/.test((await body(page)).replace(/\s+/g,' ')),'restauração devolveu o estado do backup');
+ fs.writeFileSync('/tmp/bad1.json','{"app":"outro"}');fs.writeFileSync('/tmp/bad2.json','não é json');fs.writeFileSync('/tmp/bad3.json',JSON.stringify({app:'saude-e-treino',schema:1,tables:{weights:[{date:'2024-01-01',kg:'abc'}]}}));
+ await go(page,'#/perfil');for(const b of ['bad1','bad2','bad3']){await page.setInputFiles('input[data-c=import]',`/tmp/${b}.json`);await page.waitForSelector('.modal .err');const m=await page.locator('.modal .err').textContent();ok(m.length>5,`importação inválida recusada (${b}): ${m}`);await page.click('.modal .btn')}
+ await go(page,'#/diario');ok(/750\s*\/ 2000/.test((await body(page)).replace(/\s+/g,' ')),'dados intactos após importações inválidas');
+ // Apagar com confirmação
+ await go(page,'#/perfil');await page.click('[data-a=wipe]');await page.click('[data-n]');await go(page,'#/peso');ok(/6[0-9]\.?5?|7[0-9]/.test(await body(page)),'cancelar exclusão mantém dados');
+ // PWA
+ const man=await page.evaluate(async()=>{const m=await (await fetch('manifest.webmanifest')).json();const r=await Promise.all(m.icons.map(i=>fetch(i.src).then(x=>x.status)));return{m,r}});
+ ok(man.m.display==='standalone'&&man.r.every(s=>s===200)&&man.m.icons.some(i=>i.sizes==='512x512'),'manifest PWA válido com ícones 192/512/maskable');
+ await page.evaluate(()=>navigator.serviceWorker.ready);await page.reload();await page.waitForTimeout(500);
+ ok(await page.evaluate(()=>!!navigator.serviceWorker.controller),'service worker ativo e controlando a página');
+ await ctx.setOffline(true);await page.reload();await page.waitForSelector('h1',{timeout:5000});await go(page,'#/peso');ok(/Peso/.test(await body(page))&&/69\.5|72/.test(await body(page)),'funciona OFFLINE (recarregar sem rede e dados presentes)');
+ await ctx.setOffline(false);
+ // persistência após fechar e reabrir (novo contexto não compartilha; usa storageState de IDB)
+ const st=await ctx.storageState({indexedDB:true});await page.close();await ctx.close();
+ const ctx2=await browser.newContext({...ctxOpts,storageState:st});const p2=await ctx2.newPage();await p2.goto(base);await p2.waitForSelector('h1');await p2.evaluate(()=>location.hash='#/hoje');await p2.waitForTimeout(250);
+ const t2=(await p2.locator('main').innerText()).replace(/\s+/g,' ');ok(/Ana/.test(t2)&&/750 \/ 2000 ml/.test(t2),'dados persistem após fechar e reabrir o navegador');
+ ok(errs.length===0,'sem erros de JavaScript no console'+(errs.length?': '+errs.slice(0,3).join(' | '):''));
+ await browser.close();
+}
+(async()=>{await new Promise(r=>srv.listen(8123,r));
+ try{await run('Desktop Chromium 1280×800',{viewport:{width:1280,height:800}});await run('Android Chromium (Pixel 7)',pw.devices['Pixel 7'])}catch(e){fail++;results.push('ERRO FATAL: '+e.message.split('\n')[0])}
+ console.log(results.join('\n')+`\n\nRESULTADO: ${pass} passaram, ${fail} falharam`);srv.close();process.exit(fail?1:0)})();
