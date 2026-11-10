@@ -115,10 +115,10 @@ const PAGES={hoje:['Hoje','home'],treino:['Treino','dumb'],dieta:['Dieta','food'
 const route=()=>(location.hash.replace('#/','')||'hoje').split('?')[0];
 function nav(){const r=route(),link=(k,t)=>`<a href="#/${k}" ${(r===k||(k==='mais'&&['peso','evolucao','perfil'].includes(r)))?'aria-current="page"':''}>${ico(PAGES[k][1])}<span>${t||PAGES[k][0]}</span></a>`;
  $('#tabs').innerHTML=['hoje','treino','dieta','diario','mais'].map(k=>link(k)).join('');
- $('#side').innerHTML=`<div class="brand"><i></i>Saúde e Treino</div>`+['hoje','treino','dieta','diario','peso','evolucao','perfil'].map(k=>link(k)).join('')}
+ $('#side').innerHTML=`<div class="brand"><i></i>Satori</div>`+['hoje','treino','dieta','diario','peso','evolucao','perfil'].map(k=>link(k)).join('')}
 function render(){nav();const r=PAGES[route()]?route():'hoje';
  document.documentElement.dataset.theme=S.settings.theme==='auto'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):S.settings.theme;
- $('#main').innerHTML=(P[r]||P.hoje)();document.title=`${PAGES[r]?.[0]||''} · Saúde e Treino`}
+ $('#main').innerHTML=(P[r]||P.hoje)();document.title=`${PAGES[r]?.[0]||''} · Satori`}
 window.addEventListener('hashchange',()=>{render();scrollTo(0,0)});
 const A={},C={};
 document.addEventListener('click',async e=>{const el=e.target.closest('[data-a]');if(!el||!A[el.dataset.a])return;try{await A[el.dataset.a](el.dataset,el)}catch(x){console.error(x);toast('Erro: '+x.message)}});
@@ -280,7 +280,7 @@ A.goalUp=({id})=>{const g=S.goals.find(x=>x.id==id);form('Atualizar progresso',[
 A.delGoal=async({id})=>{if(await confirmBox('Excluir esta meta?','Excluir')){await db.goals.delete(+id);await refresh()}};
 /* Backup */
 const REQ={kv:['key'],profileLog:[],goals:['title','target'],weights:['date','kg'],foods:['name','kcal'],plan:['wd','foodId','qty'],foodlog:['date','kcal'],workouts:['name','ex'],sessions:['date','items'],water:['date','ml'],steps:['date','steps'],habits:['name'],habitlog:['key','done']};
-function validate(j){if(!j||typeof j!=='object'||j.app!=='saude-e-treino')throw Error('Arquivo não é um backup do Saúde e Treino');if(typeof j.schema!=='number'||j.schema>1)throw Error('Versão de backup não suportada');if(!j.tables||typeof j.tables!=='object')throw Error('Backup sem tabelas');
+function validate(j){if(!j||typeof j!=='object'||j.app!=='saude-e-treino')throw Error('Arquivo não é um backup do Satori');if(typeof j.schema!=='number'||j.schema>1)throw Error('Versão de backup não suportada');if(!j.tables||typeof j.tables!=='object')throw Error('Backup sem tabelas');
  for(const [t,rq] of Object.entries(REQ)){const a=j.tables[t];if(a===undefined)continue;if(!Array.isArray(a))throw Error(`Tabela ${t} inválida`);if(a.length>200000)throw Error(`Tabela ${t} grande demais`);
   for(const r of a){if(!r||typeof r!=='object'||Array.isArray(r))throw Error(`Registro inválido em ${t}`);for(const k of rq)if(!(k in r))throw Error(`Registro de ${t} sem o campo “${k}”`);
    if('date'in r&&!/^\d{4}-\d{2}-\d{2}$/.test(r.date))throw Error(`Data inválida em ${t}`);
