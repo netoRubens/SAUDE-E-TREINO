@@ -40,3 +40,14 @@ O service worker usa *rede primeiro*: ao publicar uma versão nova, o app a carr
 - **Somente Android** nesta fase (APK distribuído pelo site).
 - `core/running.js`: motor de corrida (testes: `npm run test:core`). `supabase/schema.sql`: tabelas `records` e `activities` com RLS (ainda não executado em um Postgres real).
 - Banco local: todo registro tem `uid` + `updatedAt`; exclusões vão para `kv:tombstones` (base da sincronização).
+- Mapa: **OpenFreeMap** (tiles vetoriais gratuitos, sem chave/cadastro/limites declarados; atribuição obrigatória: "OpenFreeMap © OpenMapTiles Data from OpenStreetMap") + MapLibre, com estilo escuro próprio. Plano B: trajeto desenhado localmente sobre fundo escuro (sem rede) e, se necessário, tiles próprios em PMTiles. **Não usar** tile.openstreetmap.org no app distribuído (proibido sem permissão da OSMF).
+
+## Conta e sincronização (Supabase)
+**Configuração (uma vez):**
+1. Supabase › SQL Editor › cole e execute `supabase/schema.sql`.
+2. Authentication › Providers › Email: para uso pessoal, desative *Confirm email* (senão cada cadastro exige clicar em um link; nesse caso defina também *Site URL* com o endereço do site).
+3. `config.js` já contém a URL do projeto e a chave **publishable** (pública por design). **Nunca** coloque a chave secreta (`sb_secret_…` / `service_role`) no app.
+
+**Como funciona:** Perfil e metas › *Conta e sincronização* › Entrar / Criar conta. A 1ª sincronização de cada aparelho é manual e pede confirmação; depois é automática após cada alteração (com internet). Conflito = vence a alteração mais recente (relógios dos aparelhos devem estar certos). Exclusões são propagadas. Tokens e cursor de sincronização ficam fora do backup JSON.
+**Testes:** `npm run test:sync` (usa um Supabase *simulado*; o servidor real não foi exercitado).
+**Limite conhecido:** "Apagar tudo" apaga só o aparelho local (não gera exclusões na nuvem).

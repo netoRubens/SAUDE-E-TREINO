@@ -8,6 +8,7 @@
     "setup:tests": "node scripts/setup.mjs --tests",
     "start": "node scripts/serve.cjs",
     "test": "node test/e2e.cjs",
+    "test:sync": "node test/sync.e2e.cjs",
     "test:core": "node test/running.test.mjs"
   },
   "engines": { "node": ">=18" }
