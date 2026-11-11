@@ -14,7 +14,7 @@ const body=page=>page.locator('main').innerText();
 async function run(name,ctxOpts){
  results.push(`\n== ${name} ==`);
  const browser=await pw.chromium.launch();const ctx=await browser.newContext({acceptDownloads:true,...ctxOpts});const page=await ctx.newPage();const _c=page.click.bind(page);page.click=async(...a)=>{const r=await _c(...a);await page.waitForTimeout(150);return r};
- const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/404/.test(m.text()))errs.push(m.text())});
+ const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/404/.test(m.text())&&!/vendor\/dexie/.test(m.location().url))errs.push(m.text()+' @'+m.location().url)});
  const base='http://localhost:8123/index.html';await page.goto(base);await page.waitForSelector('h1');
  const mobile=!!ctxOpts.isMobile;
  ok(await page.locator(mobile?'#tabs':'#side').isVisible()&&!await page.locator(mobile?'#side':'#tabs').isVisible(),mobile?'navegação inferior (mobile) visível, lateral oculta':'navegação lateral (desktop) visível, inferior oculta');
@@ -85,6 +85,30 @@ async function run(name,ctxOpts){
  // Responsividade: sem rolagem horizontal
  let over=[];for(const h of ['hoje','treino','dieta','diario','peso','evolucao','perfil']){await go(page,'#/'+h);const w=await page.evaluate(()=>[document.documentElement.scrollWidth,innerWidth]);if(w[0]>w[1]+1)over.push(h+':'+w.join('>'))}
  ok(!over.length,'sem overflow horizontal em todas as telas '+over.join(','));
+ // Refeições modelo
+ await go(page,'#/dieta');const e2d=(new Date().getDay()+2)%7;await page.click('[data-a=saveTpl][data-k=almoco]');await fillForm(page,{name:'Almoço padrão'});ok(/Almoço padrão/.test(await body(page)),'refeição salva como modelo');
+ await page.click(`[data-a=dwd][data-i="${e2d}"]`);await page.click('[data-a=useTpl][data-k=almoco]');await fillForm(page,{});ok(/Arroz cozido/.test(await page.locator('section:has(h2:text-is("Almoço"))').innerText()),'modelo inserido em outro dia');
+ await page.reload();await page.waitForSelector('h1');ok(/Almoço padrão/.test(await body(page)),'modelos persistem');
+ // Importar planilha
+ ok(await page.evaluate(async()=>(await Promise.all(['templates/satori-modelo-treino.xlsx','templates/satori-modelo-treino.csv'].map(u=>fetch(u).then(r=>r.status)))).every(s=>s===200)),'planilhas modelo (.xlsx e .csv) disponíveis para download');
+ await go(page,'#/treino');const pb=await page.locator('#promptBox').inputValue();ok(/ENTREVISTA/.test(pb)&&/Dia, Treino, Horário/.test(pb)&&!/MEUS DADOS/.test(pb),'prompt do ChatGPT presente (entrevista + formato)');
+ await page.locator('[data-c=pInc]').check();await page.waitForTimeout(150);const pb2=await page.locator('#promptBox').inputValue();ok(/MEUS DADOS/.test(pb2)&&/30 anos/.test(pb2)&&/joelho sensível/.test(pb2)&&!/Ana/.test(pb2),'prompt inclui dados do perfil (sem o nome) quando marcado');
+ await page.click('[data-a=copyPrompt]');ok(/copiado/.test(await page.locator('#toast').textContent()),'botão copiar prompt');
+ const [dl2]=await Promise.all([page.waitForEvent('download'),page.click('a[href$="satori-modelo-treino.xlsx"]')]);ok(/modelo-treino\.xlsx$/.test(dl2.suggestedFilename()),'botão baixar planilha modelo');
+ fs.writeFileSync('/tmp/imp.csv','\uFEFFDia;Treino;Horário;Duração;Exercício;Séries x repetições;Observações\n#Segunda;Exemplo ignorado;;;X;1x1;\nSegunda;Peito Teste;18h;40 min;Supino com halteres;3x10;"Controle a descida, sem pressa"\nSegunda;Peito Teste;18h;40 min;Flexão;3x8;\n');
+ await page.setInputFiles('input[data-c=impW]','/tmp/imp.csv');await page.waitForSelector('#imode');ok(/1 treino\(s\), 2 exercício/.test(await page.locator('.sheet').innerText()),'CSV (; e BOM): pré-visualização correta, linha # ignorada');
+ await page.click('[data-ok]');await page.waitForSelector('.modal',{state:'detached'});await page.waitForTimeout(150);await page.click('[data-a=tday][aria-label*="segunda"]');
+ ok(/Peito Teste/.test(await body(page))&&/Supino com halteres/.test(await body(page))&&/Controle a descida, sem pressa/.test(await body(page)),'CSV importado: treino, exercícios e observação (vírgula entre aspas)');
+ await page.setInputFiles('input[data-c=impW]','test/fixtures/treino.xlsx');await page.waitForSelector('#imode');ok(/2 treino\(s\), 3 exercício/.test(await page.locator('.sheet').innerText()),'XLSX: lido localmente com pré-visualização');
+ await page.click('[data-ok]');await page.waitForSelector('.modal',{state:'detached'});await page.waitForTimeout(150);await page.click('[data-a=tday][aria-label*="quarta"]');ok(/Treino XLSX/.test(await body(page))&&/Remada com elástico/.test(await body(page))&&/3x12/.test(await body(page)),'XLSX importado corretamente');
+ await page.setInputFiles('input[data-c=impW]','templates/satori-modelo-treino.xlsx');await page.waitForSelector('.modal .err');ok(/Nenhum treino encontrado/.test(await page.locator('.modal').innerText()),'planilha modelo intacta (só exemplos #) não importa nada');await page.click('.modal .btn');
+ fs.writeFileSync('/tmp/bad.csv','Dia,Treino,Exercício\nMarte,Treino X,Supino\nSegunda,,Flexão\n');const nW=await page.evaluate(()=>__app.S.workouts.length);
+ await page.setInputFiles('input[data-c=impW]','/tmp/bad.csv');await page.waitForSelector('.modal .err');const em=await page.locator('.modal').innerText();ok(/Linha 2: dia inválido/.test(em)&&/Linha 3: nome do treino vazio/.test(em),'erros com número da linha');await page.click('.modal .btn');
+ ok(await page.evaluate(()=>__app.S.workouts.length)===nW,'importação inválida não altera nada');
+ fs.writeFileSync('/tmp/bad.txt','x');await page.setInputFiles('input[data-c=impW]','/tmp/bad.txt');await page.waitForSelector('.modal .err');ok(/xlsx ou um arquivo \.csv|\.xlsx ou \.csv/.test(await page.locator('.modal').innerText()),'extensão inválida recusada');await page.click('.modal .btn');
+ const nSess=await page.evaluate(()=>__app.S.sessions.length);
+ await page.setInputFiles('input[data-c=impW]','test/fixtures/treino.xlsx');await page.waitForSelector('#imode');await page.selectOption('#imode','replace');await page.click('[data-ok]');await page.waitForSelector('[data-y]');await page.click('[data-y]');await page.waitForTimeout(300);
+ const wn=await page.evaluate(()=>__app.S.workouts.map(w=>w.name).sort().join('|'));ok(wn==='Longão|Treino XLSX','modo substituir troca todo o plano');ok(await page.evaluate(()=>__app.S.sessions.length)===nSess&&nSess>0,'histórico de sessões preservado ao substituir o plano');
  // Backup / restauração
  await go(page,'#/perfil');const [dl]=await Promise.all([page.waitForEvent('download'),page.click('[data-a=export]')]);const fp='/tmp/backup-'+name.replace(/\W/g,'')+'.json';await dl.saveAs(fp);const bj=JSON.parse(fs.readFileSync(fp,'utf8'));
  ok(bj.app==='saude-e-treino'&&bj.tables.weights.length===2&&bj.tables.foods.length===1&&bj.tables.water.length===2,'backup JSON exportado com os dados');
@@ -96,6 +120,9 @@ async function run(name,ctxOpts){
  await go(page,'#/diario');ok(/750\s*\/ 2000/.test((await body(page)).replace(/\s+/g,' ')),'dados intactos após importações inválidas');
  // Apagar com confirmação
  await go(page,'#/perfil');await page.click('[data-a=wipe]');await page.click('[data-n]');await go(page,'#/peso');ok(/6[0-9]\.?5?|7[0-9]/.test(await body(page)),'cancelar exclusão mantém dados');
+ // Lembrete de backup
+ await page.evaluate(async()=>{await db.kv.put({key:'meta',seeded:1,v:1,at:'2020-01-01'})});await page.reload();await page.waitForSelector('h1');await go(page,'#/hoje');ok(/Faça um backup/.test(await body(page)),'lembrete de backup aparece quando nunca houve backup');
+ const [dl3]=await Promise.all([page.waitForEvent('download'),page.locator('main [data-a=export]').first().click()]);await page.waitForTimeout(300);ok(!/Faça um backup/.test(await body(page)),'lembrete some após exportar o backup');
  // PWA
  const man=await page.evaluate(async()=>{const m=await (await fetch('manifest.webmanifest')).json();const r=await Promise.all(m.icons.map(i=>fetch(i.src).then(x=>x.status)));return{m,r}});
  ok(man.m.display==='standalone'&&man.r.every(s=>s===200)&&man.m.icons.some(i=>i.sizes==='512x512'),'manifest PWA válido com ícones 192/512/maskable');

@@ -24,3 +24,11 @@ Limpar dados do navegador ou desinstalar o app apaga os dados locais — exporte
 
 ## Fontes dos cálculos
 TMB: Mifflin-St Jeor (1990). Gasto = TMB × fator de atividade (1,2 / 1,375 / 1,55 / 1,725). Proteína = g/kg configurável (padrão 1,6); gordura = % das kcal (padrão 25%); carboidrato = restante. Estimativas, não prescrição.
+
+## Importar treino por planilha (aba Treino)
+- **Baixar planilha modelo** (.xlsx ou .csv): colunas `Dia, Treino, Horário, Duração, Exercício, Séries x repetições, Observações`; uma linha por exercício; linhas começando com `#` são ignoradas.
+- **Importar planilha**: lê .xlsx/.csv localmente (sem biblioteca externa), valida linha a linha, mostra pré-visualização e deixa escolher *adicionar* ou *substituir* o plano. O histórico de sessões nunca é apagado.
+- **Prompt para o ChatGPT**: entrevista de preferências e objetivos, confirmação e entrega em .xlsx/CSV no formato do app. Opção de incluir os dados do perfil (sem o nome).
+
+## Atualizações
+O service worker usa *rede primeiro*: ao publicar uma versão nova, o app a carrega na próxima abertura online. Se o `sw.js` mudar, aparece o aviso "Nova versão instalada — Recarregar". Os dados (IndexedDB) não são afetados.

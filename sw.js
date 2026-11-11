@@ -1,7 +1,8 @@
-const V='satori-v2';
-const FILES=['./','index.html','styles.css','db.js','app.js','manifest.webmanifest','icons/icon.svg','icons/icon-192.png','icons/icon-512.png','icons/favicon-32.png','vendor/dexie.min.js'];
+const V='satori-v3';
+const FILES=['./','index.html','styles.css','db.js','app.js','manifest.webmanifest','icons/icon.svg','icons/icon-192.png','icons/icon-512.png','icons/favicon-32.png','vendor/dexie.min.js','templates/satori-modelo-treino.xlsx','templates/satori-modelo-treino.csv'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>Promise.all(FILES.map(f=>c.add(f).catch(()=>{})))).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
-// Só cache de arquivos do app. Os dados do usuário ficam no IndexedDB e não são tocados por atualizações.
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;
-  e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request).then(res=>{const cp=res.clone();caches.open(V).then(c=>c.put(e.request,cp));return res}).catch(()=>caches.match('index.html'))))});
+// Rede primeiro (arquivos novos chegam sem precisar mudar a versão); cache só como reserva offline/lenta.
+// Os dados do usuário ficam no IndexedDB e não são tocados por atualizações.
+self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET'||new URL(r.url).origin!==location.origin)return;
+ e.respondWith((async()=>{const c=await caches.open(V);try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),4000);const res=await fetch(r,{signal:ctl.signal,cache:'no-cache'});clearTimeout(t);if(res.ok)c.put(r,res.clone());return res}catch{return(await c.match(r,{ignoreSearch:true}))||(r.mode==='navigate'?await c.match('index.html'):Response.error())}})())});

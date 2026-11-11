@@ -60,3 +60,5 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1p
 .tag{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mu)}
 .ring{position:relative;width:96px;height:96px;flex:none}.ring svg{transform:rotate(-90deg)}.ring div{position:absolute;inset:0;display:grid;place-items:center;font-weight:800}
 a.btn{text-decoration:none}
+#upd{position:fixed;left:12px;right:12px;bottom:84px;max-width:420px;margin:auto;z-index:70;border-color:var(--ac);box-shadow:0 10px 40px #0008}
+@media(min-width:900px){#upd{bottom:24px;left:auto;right:24px;margin:0}}
