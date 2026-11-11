@@ -120,6 +120,16 @@ async function run(name,ctxOpts){
  await go(page,'#/diario');ok(/750\s*\/ 2000/.test((await body(page)).replace(/\s+/g,' ')),'dados intactos após importações inválidas');
  // Apagar com confirmação
  await go(page,'#/perfil');await page.click('[data-a=wipe]');await page.click('[data-n]');await go(page,'#/peso');ok(/6[0-9]\.?5?|7[0-9]/.test(await body(page)),'cancelar exclusão mantém dados');
+ // Preparação para sincronização: uid estável, updatedAt, exclusões registradas
+ const sy=await page.evaluate(async()=>{const w=await db.weights.toArray();const x=w[0];await db.weights.put({date:x.date,kg:x.kg+0.1,id:x.id}); // put "sem uid" preserva o uid existente
+  const x2=await db.weights.get(x.id);await db.weights.add({date:'2020-01-01',kg:60,note:''});const n=(await db.weights.toArray()).find(r=>r.date==='2020-01-01');await db.weights.delete(n.id);
+  await db.weights.bulkAdd([{date:'2019-01-01',kg:61}]);await syncPrep();const old=(await db.weights.toArray()).find(r=>r.date==='2019-01-01');
+  await db.steps.put({date:'2019-02-02',steps:10});await db.steps.delete('2019-02-02');const tb=(await db.kv.get('tombstones')).items;
+  return{u1:x.uid,u2:x2.uid,ts:typeof x2.updatedAt,len:(x.uid||'').length,newUid:!!n.uid,tomb:tb.some(t=>t.t==='weights'&&t.uid===n.uid),tombStep:tb.some(t=>t.t==='steps'&&t.key==='2019-02-02'),back:!!old.uid,all:(await Promise.all(SYNC_TABLES.map(t=>db[t].toArray()))).flat().every(r=>r.uid)}});
+ ok(sy.len===36&&sy.u1===sy.u2&&sy.ts==='number','registros têm uid (UUID) e updatedAt; editar preserva o uid');
+ ok(sy.newUid&&sy.tomb&&sy.tombStep,'exclusões geram marcador (tombstone) para sincronizar depois');
+ ok(sy.back&&sy.all,'dados antigos sem uid (ex.: backup antigo) recebem uid automaticamente');
+ await page.evaluate(async()=>{const r=(await db.weights.toArray()).find(x=>x.date==='2019-01-01');await db.weights.delete(r.id)});
  // Lembrete de backup
  await page.evaluate(async()=>{await db.kv.put({key:'meta',seeded:1,v:1,at:'2020-01-01'})});await page.reload();await page.waitForSelector('h1');await go(page,'#/hoje');ok(/Faça um backup/.test(await body(page)),'lembrete de backup aparece quando nunca houve backup');
  const [dl3]=await Promise.all([page.waitForEvent('download'),page.locator('main [data-a=export]').first().click()]);await page.waitForTimeout(300);ok(!/Faça um backup/.test(await body(page)),'lembrete some após exportar o backup');

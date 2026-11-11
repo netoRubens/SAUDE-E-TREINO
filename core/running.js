@@ -1,15 +1,8 @@
 /* Motor de corrida do Satori — JavaScript puro, sem dependências de navegador.
    Roda igual no site, no app (React Native/Expo) e no Node (testes). Recebe pontos GPS; não acessa GPS. */
-export const CFG={maxAcc:25,maxSpeed:12.5,minStep:3,gapMs:30000,stillMs:10000,moveSpeed:0.8,paceWinMs:30000,MET:2.8};
+export const CFG={maxAcc:25,maxSpeed:12.5,minStep:3,gapMs:30000,stillMs:10000,moveSpeed:0.8,paceWinMs:30000};
 const R=6371008.8,rad=d=>d*Math.PI/180;
 export const haversine=(a,b)=>{const h=Math.sin(rad(b.lat-a.lat)/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(rad(b.lon-a.lon)/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
-/* Seção 8: caminhada leve (2,8 MET) como referência, sempre — a velocidade da corrida NÃO entra.
-   kcalNet = (MET−1)·3,5·kg/200·min  (gasto adicional, para o diário)  |  kcalTotal = MET·3,5·kg/200·min */
-export function walkCalories({weightKg,activeMs,met=CFG.MET}){
-  if(!(weightKg>20&&weightKg<400))throw new Error('Peso ausente ou inválido: atualize o perfil antes de calcular calorias');
-  if(!(activeMs>=0))throw new Error('Tempo ativo inválido');
-  const min=activeMs/60000,k=3.5*weightKg/200*min;
-  return{met,weightKg,activeMin:min,kcalTotal:met*k,kcalNet:(met-1)*k,label:'Calorias estimadas — equivalente a caminhada leve'}}
 export function createTracker(opts={},init=null){
   const c={...CFG,autoPause:true,...opts};
   const s=init?structuredClone(init):{id:opts.id??null,status:'idle',pts:[],pauses:[],dist:0,rej:{acc:0,speed:0,order:0,invalid:0},gapMs:0,startT:null,endT:null,anchor:null,lastMoveT:null};

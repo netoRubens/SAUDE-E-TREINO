@@ -1,4 +1,4 @@
-import {createTracker,walkCalories,restoreTracker,haversine} from '../core/running.js';
+import {createTracker,restoreTracker} from '../core/running.js';
 let pass=0,fail=0;const ok=(c,m)=>{c?pass++:fail++;console.log((c?'  ✓ ':'  ✗ FALHOU: ')+m)};
 const near=(a,b,tol)=>Math.abs(a-b)<=tol;
 const LAT=-19.9167,LON=-43.9345,prng=s=>()=>((s=Math.imul(s^s>>>15,s|1),s^=s+Math.imul(s^s>>>7,s|61),((s^s>>>14)>>>0)/4294967296));
@@ -32,13 +32,7 @@ console.log('\n== Motor de corrida ==');
  const r2=prng(99);const more=[{sec:100,v:V}];sim(A,sa,more,{seed:99});sim(R,sb,more,{seed:99});
  ok(JSON.stringify(A.snapshot(sa.t))===JSON.stringify(R.snapshot(sb.t)),'recuperação: estado salvo/restaurado dá resultado idêntico ao da corrida sem interrupção');
  ok(R.snapshot(0).id==='x','id da atividade preservado (evita duplicidade na sincronização)')}
-console.log('\n== Calorias (caminhada leve, 2,8 MET) ==');
-{const w=walkCalories({weightKg:70,activeMs:30*60000});
- ok(near(w.kcalNet,66.15,.01)&&near(w.kcalTotal,102.9,.01),`70 kg, 30 min: líquido ${w.kcalNet.toFixed(2)} kcal (esperado 66,15) | total ${w.kcalTotal.toFixed(2)} (esperado 102,90)`);
- const w2=walkCalories({weightKg:90,activeMs:30*60000});ok(w2.kcalNet>w.kcalNet&&near(w2.kcalNet/w.kcalNet,90/70,1e-9),'proporcional ao peso do perfil');
- const fast=createTracker(),slow=createTracker();fast.start(0);slow.start(0);const a={t:0,y:0},b={t:0,y:0};sim(fast,a,[{sec:600,v:4.5}]);sim(slow,b,[{sec:600,v:1.5}]);
- const kf=walkCalories({weightKg:70,activeMs:fast.snapshot(a.t).activeMs}).kcalNet,ks=walkCalories({weightKg:70,activeMs:slow.snapshot(b.t).activeMs}).kcalNet;
- ok(kf===ks&&fast.snapshot(a.t).distM>2*slow.snapshot(b.t).distM,'correr mais rápido NÃO aumenta as calorias (mesmo tempo ativo = mesmo valor)');
- for(const bad of [undefined,null,0,-5,10,NaN]){let t=false;try{walkCalories({weightKg:bad,activeMs:6e4})}catch{t=true}if(!t){ok(false,'aceitou peso inválido '+bad)}}
- ok(true,'peso ausente/zero/negativo/absurdo → erro pedindo atualização do perfil (nunca inventa peso)')}
+console.log('\n== Escopo ==');
+{const tr=createTracker();tr.start(0);const st={t:0,y:0};sim(tr,st,[{sec:60,v:V}]);const k=Object.keys(tr.snapshot(st.t)).join(',');
+ ok(!/kcal|cal/i.test(k)&&!('walkCalories' in await import('../core/running.js')),'motor não calcula nem expõe calorias (decisão do projeto: sem estimativa de gasto na corrida)')}
 console.log(`\nRESULTADO: ${pass} passaram, ${fail} falharam`);process.exit(fail?1:0);

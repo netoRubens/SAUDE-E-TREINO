@@ -27,4 +27,17 @@
   }
   if (window.Dexie) { const d = new Dexie('saude-e-treino'); d.version(1).stores(SCHEMA); window.db = d; window.DB_ENGINE = 'Dexie ' + Dexie.semver; }
   else { window.db = shim(); window.DB_ENGINE = 'IndexedDB (shim com API Dexie — rode scripts/get-dexie.sh para usar o Dexie real)'; }
+
+  /* Preparação para sincronização (sem mudar o esquema): todo registro ganha `uid` (UUID estável entre aparelhos) e `updatedAt`;
+     exclusões ficam registradas em kv:"tombstones" para serem propagadas depois. */
+  const SYNC=['profileLog','goals','weights','foods','plan','foodlog','workouts','sessions','water','habits'];
+  const uuid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&3|8).toString(16)});
+  const stamp=r=>{if(r&&typeof r==='object'){r.uid=r.uid||uuid();r.updatedAt=Date.now()}};
+  const db=window.db;window.SYNC_TABLES=SYNC;
+  const tomb=async(t,uid,key)=>{const cur=(await db.kv.get('tombstones'))?.items||[];cur.push({t,uid,key,at:Date.now()});await db.kv.put({key:'tombstones',items:cur.slice(-5000)})};
+  for(const t of db.tables){if(t.name==='kv')continue;const sync=SYNC.includes(t.name),o={add:t.add.bind(t),put:t.put.bind(t),del:t.delete.bind(t),get:t.get.bind(t)};
+    t.add=r=>{if(sync)stamp(r);return o.add(r)};
+    t.put=async r=>{if(sync){if(!r.uid&&r.id!=null){const old=await o.get(r.id);if(old?.uid)r.uid=old.uid}stamp(r)}return o.put(r)};
+    t.delete=async k=>{const old=await o.get(k);if(old)await tomb(t.name,old.uid||null,old.uid?null:k);return o.del(k)}}
+  window.syncPrep=async()=>{for(const n of SYNC){for(const r of await db[n].toArray())if(!r.uid)await db[n].put(r)}}; // preenche uid em dados antigos / backups antigos
 })();

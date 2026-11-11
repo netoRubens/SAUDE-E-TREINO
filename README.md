@@ -32,3 +32,11 @@ TMB: Mifflin-St Jeor (1990). Gasto = TMB × fator de atividade (1,2 / 1,375 / 1,
 
 ## Atualizações
 O service worker usa *rede primeiro*: ao publicar uma versão nova, o app a carrega na próxima abertura online. Se o `sw.js` mudar, aparece o aviso "Nova versão instalada — Recarregar". Os dados (IndexedDB) não são afetados.
+
+## Decisões do projeto (fase app + corrida)
+- Conta e nuvem: **aprovadas** (backend Supabase, RLS por usuário). Trajetos são privados por padrão.
+- **Sem estimativa de calorias na corrida** e sem integração de gasto com a dieta.
+- Cor: rosa `#F0A1BB` (identidade do Satori).
+- **Somente Android** nesta fase (APK distribuído pelo site).
+- `core/running.js`: motor de corrida (testes: `npm run test:core`). `supabase/schema.sql`: tabelas `records` e `activities` com RLS (ainda não executado em um Postgres real).
+- Banco local: todo registro tem `uid` + `updatedAt`; exclusões vão para `kv:tombstones` (base da sincronização).
