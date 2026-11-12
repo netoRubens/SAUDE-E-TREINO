@@ -2,19 +2,21 @@
    Estratégia: envia registros alterados (updatedAt) e exclusões; baixa o que mudou; conflito = vence o mais recente (LWW). */
 (function(){
 const C=window.SATORI_CFG,EPOCH='1970-01-01T00:00:00.000Z',iso=ms=>new Date(ms).toISOString();
-const ORDER=['foods','workouts','habits','goals','weights','plan','foodlog','sessions','water','profileLog','steps','habitlog','kv'];
+const ORDER=['foods','workouts','habits','goals','weights','plan','foodlog','sessions','water','activities','profileLog','steps','habitlog','kv'];
 const REFS={plan:[['foodId','foods']],foodlog:[['foodId','foods']],sessions:[['wid','workouts']]};
 async function api(path,{method='GET',body,token,headers={}}={}){let r;
   try{r=await fetch(C.url+path,{method,headers:{apikey:C.key,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...headers},body:body?JSON.stringify(body):undefined})}catch{throw Object.assign(new Error('Sem conexão com o servidor'),{offline:true})}
   const t=await r.text();let j=null;try{j=t?JSON.parse(t):null}catch{}
   if(!r.ok)throw Object.assign(new Error(j?.msg||j?.message||j?.error_description||j?.error||'HTTP '+r.status),{status:r.status});return j}
-const getS=()=>db.kv.get('session'),setS=s=>db.kv.put({key:'session',...s});
-const toS=(j,old)=>({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||3600)*1000,user:{id:(j.user||old.user).id,email:(j.user||old.user).email}});
+let mem=null; // sessão só em memória quando "lembrar de mim" está desmarcado (some ao fechar o app)
+const getS=async()=>mem||db.kv.get('session'),setS=async s=>{if(s.remember===false){mem=s;await db.kv.delete('session')}else{mem=null;await db.kv.put({key:'session',...s})}};
+const toS=(j,old,rem)=>({remember:rem!==undefined?rem:old?.remember!==false,access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||3600)*1000,user:{id:(j.user||old.user).id,email:(j.user||old.user).email}});
 async function token(){let s=await getS();if(!s)throw new Error('Sem sessão');
   if(s.expires_at-Date.now()<60000){try{s=toS(await api('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:s.refresh_token}}),s);await setS(s)}catch(e){if(e.status===400||e.status===401){await db.kv.delete('session');throw new Error('Sessão expirada: entre novamente')}throw e}}return s}
-async function signUp(email,password){const j=await api('/auth/v1/signup',{method:'POST',body:{email,password}});if(!j?.access_token)return{needsConfirm:true};await setS(toS(j));return{ok:true}}
-async function signIn(email,password){await setS(toS(await api('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}})));return{ok:true}}
-const signOut=()=>db.kv.delete('session');
+const savePref=(email,rem)=>db.kv.put({key:'authPref',remember:rem,email:rem?email:''}); // a SENHA nunca é guardada pelo app (o gerenciador de senhas do navegador/Android cuida disso)
+async function signUp(email,password,remember=true){const j=await api('/auth/v1/signup',{method:'POST',body:{email,password}});await savePref(email,remember);if(!j?.access_token)return{needsConfirm:true};await setS(toS(j,null,remember));return{ok:true}}
+async function signIn(email,password,remember=true){const j=await api('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});await savePref(email,remember);await setS(toS(j,null,remember));return{ok:true}}
+const signOut=async()=>{mem=null;await db.kv.delete('session')};
 let busy=false;
 async function syncNow({auto=false}={}){if(busy)return null;busy=true;let st;
  try{const s=await token();st=(await db.kv.get('sync'))||{key:'sync',push:0,pull:EPOCH};
@@ -51,5 +53,5 @@ async function pull(s,st){const all=[];for(let off=0;;){const rows=await api(`/r
   if(['foods','workouts','habits'].includes(t))u2i[t]=Object.fromEntries(Object.entries(await maps(t)).map(([u,r])=>[u,r.id]))}
  if(!skipped&&all.length)st.pull=all[all.length-1].updated_at;return n}
 let tm;function schedule(){clearTimeout(tm);tm=setTimeout(async()=>{if(!navigator.onLine)return;try{const r=await syncNow({auto:true});if(r&&r.pulled)window.dispatchEvent(new Event('satori-synced'))}catch(e){console.warn('sync:',e.message)}},4000)}
-window.Sync={signUp,signIn,signOut,syncNow,schedule,session:getS,state:()=>db.kv.get('sync')};
+window.Sync={signUp,signIn,signOut,syncNow,schedule,session:getS,state:()=>db.kv.get('sync'),pref:()=>db.kv.get('authPref')};
 })();

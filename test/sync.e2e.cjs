@@ -5,30 +5,10 @@ const ROOT=path.join(__dirname,'..'),MIME={'.html':'text/html','.js':'text/javas
 const srv=http.createServer((q,r)=>{let p=decodeURIComponent(q.url.split('?')[0]);if(p==='/')p='/index.html';const f=path.join(ROOT,p);if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);return r.end()}r.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'x'});fs.createReadStream(f).pipe(r)});
 const CFG=fs.readFileSync(path.join(ROOT,'config.js'),'utf8'),SB=CFG.match(/url:'([^']+)'/)[1],KEY=CFG.match(/key:'([^']+)'/)[1];
 let pass=0,fail=0;const out=[];const ok=(c,m)=>{c?pass++:fail++;out.push((c?'  ✓ ':'  ✗ FALHOU: ')+m)};
-/* ---- Supabase simulado: Auth + PostgREST + RLS + trigger keep_newer ---- */
-const M={users:new Map(),tok:new Map(),ref:new Map(),rows:new Map(),log:[],refreshCalls:0};
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'apikey,authorization,content-type,prefer','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
-const J=(route,status,body)=>route.fulfill({status,headers:{...cors,'Content-Type':'application/json'},body:body===undefined?'':JSON.stringify(body)});
-const sess=(u)=>{const a='at-'+crypto.randomUUID(),r='rt-'+crypto.randomUUID();M.tok.set(a,u.id);M.ref.set(r,u.id);return{access_token:a,refresh_token:r,expires_in:3600,user:{id:u.id,email:u.email}}};
-async function handle(route){if(M.down)return route.abort('failed');const rq=route.request(),u=new URL(rq.url()),h=rq.headers();
- if(rq.method()==='OPTIONS')return route.fulfill({status:204,headers:cors});
- M.log.push({m:rq.method(),p:u.pathname,apikey:h.apikey,auth:h.authorization});
- if(h.apikey!==KEY)return J(route,401,{message:'Invalid API key'});
- const body=()=>{try{return JSON.parse(rq.postData()||'null')}catch{return null}};
- if(u.pathname==='/auth/v1/signup'){const b=body();if(M.users.has(b.email))return J(route,422,{msg:'User already registered'});const usr={id:crypto.randomUUID(),email:b.email,pw:b.password};M.users.set(b.email,usr);return J(route,200,sess(usr))}
- if(u.pathname==='/auth/v1/token'){const b=body(),g=u.searchParams.get('grant_type');
-  if(g==='password'){const usr=M.users.get(b.email);if(!usr||usr.pw!==b.password)return J(route,400,{error:'invalid_grant',error_description:'Invalid login credentials'});return J(route,200,sess(usr))}
-  if(g==='refresh_token'){M.refreshCalls++;const id=M.ref.get(b.refresh_token);if(!id)return J(route,400,{error:'invalid_grant'});M.ref.delete(b.refresh_token);return J(route,200,sess([...M.users.values()].find(x=>x.id===id)))}}
- if(u.pathname==='/rest/v1/records'){const a=(h.authorization||'').replace('Bearer ',''),uid=M.tok.get(a);if(!uid)return J(route,401,{message:'JWT invalid'});
-  if(rq.method()==='POST'){const rows=body();if(rows.some(r=>r.user_id!==uid))return J(route,403,{message:'new row violates row-level security policy'});
-   for(const r of rows){const k=`${uid}|${r.tbl}|${r.uid}`,old=M.rows.get(k);if(old&&Date.parse(r.updated_at)<Date.parse(old.updated_at))continue;M.rows.set(k,r)}return J(route,201)}
-  if(rq.method()==='GET'){const gte=(u.searchParams.get('updated_at')||'gte.').slice(4),lim=+u.searchParams.get('limit')||1000,off=+u.searchParams.get('offset')||0;
-   const rows=[...M.rows.entries()].filter(([k])=>k.startsWith(uid+'|')).map(([,r])=>r).filter(r=>Date.parse(r.updated_at)>=Date.parse(gte)).sort((a,b)=>a.updated_at<b.updated_at?-1:a.updated_at>b.updated_at?1:a.tbl+a.uid<b.tbl+b.uid?-1:1).slice(off,off+lim).map(({tbl,uid,data,updated_at,deleted})=>({tbl,uid,data,updated_at,deleted}));return J(route,200,rows)}}
- return J(route,404,{message:'not found'})}
-const mine=(email)=>[...M.rows.entries()].filter(([k])=>k.startsWith(M.users.get(email).id+'|')).map(([,r])=>r);
+const {M,handle,mine}=require('./mock-supabase.cjs')(KEY);
 async function fill(page,vals){for(const[k,v]of Object.entries(vals))await page.locator(`.sheet [name="${k}"]`).fill(v);await page.click('.sheet button[type=submit]')}
 (async()=>{await new Promise(r=>srv.listen(8126,r));const browser=await pw.chromium.launch(),base='http://localhost:8126/index.html',errs=[];
- const device=async()=>{const ctx=await browser.newContext({viewport:{width:1280,height:800}});await ctx.route(SB+'/**',handle);const p=await ctx.newPage();p.on('pageerror',e=>errs.push(e.message));await p.goto(base);await p.waitForSelector('h1');return{ctx,p}};
+ const device=async()=>{const ctx=await browser.newContext({viewport:{width:1280,height:800}});await ctx.route(SB+'/**',handle);const p=await ctx.newPage();p.on('pageerror',e=>errs.push(e.message));await p.goto(base);await p.waitForSelector('h1');await p.evaluate(async()=>{for(let i=0;i<50;i++){const m=await db.kv.get('meta');if(m){await db.kv.put({...m,onboarded:true});return}await new Promise(r=>setTimeout(r,100))}});await p.reload();await p.waitForSelector('h1');return{ctx,p}};
  const ev=(d,f,a)=>d.p.evaluate(f,a);
  out.push('\n== Sincronização (2 aparelhos, Supabase simulado) ==');
  const A=await device();

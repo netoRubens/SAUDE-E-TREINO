@@ -2,13 +2,14 @@
    usa um shim mínimo com a MESMA API (add/put/get/delete/clear/toArray/bulkAdd/bulkPut), também sobre IndexedDB. */
 (function () {
   const SCHEMA = { kv:'key', profileLog:'++id', goals:'++id', weights:'++id,date', foods:'++id', plan:'++id,wd',
-    foodlog:'++id,date', workouts:'++id,day', sessions:'++id,date', water:'++id,date', steps:'date', habits:'++id', habitlog:'key,date' };
+    foodlog:'++id,date', workouts:'++id,day', sessions:'++id,date', water:'++id,date', steps:'date', habits:'++id', habitlog:'key,date', activities:'++id,date' };
+  const V1 = { ...SCHEMA }; delete V1.activities; // v1 = sem corridas; v2 = com `activities`
   window.SCHEMA = SCHEMA;
   function shim() {
     const open = new Promise((res, rej) => {
-      const r = indexedDB.open('saude-e-treino', 1);
+      const r = indexedDB.open('saude-e-treino', 20); // 20 = mesma versão interna do Dexie para version(2)
       r.onupgradeneeded = () => { const d = r.result;
-        for (const [n, s] of Object.entries(SCHEMA)) { const [pk, ...ix] = s.split(',');
+        for (const [n, s] of Object.entries(SCHEMA)) { if (d.objectStoreNames.contains(n)) continue; const [pk, ...ix] = s.split(',');
           const st = d.createObjectStore(n, pk.startsWith('++') ? { keyPath: pk.slice(2), autoIncrement: true } : { keyPath: pk });
           ix.forEach(i => st.createIndex(i, i)); } };
       r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
@@ -25,12 +26,12 @@
       bulkPut: a => run(n, 'readwrite', s => { a.forEach(v => s.put(v)); }) }));
     const db = { tables, transaction: (m, t, fn) => fn() }; tables.forEach(t => (db[t.name] = t)); return db;
   }
-  if (window.Dexie) { const d = new Dexie('saude-e-treino'); d.version(1).stores(SCHEMA); window.db = d; window.DB_ENGINE = 'Dexie ' + Dexie.semver; }
+  if (window.Dexie) { const d = new Dexie('saude-e-treino'); d.version(1).stores(V1); d.version(2).stores(SCHEMA); window.db = d; window.DB_ENGINE = 'Dexie ' + Dexie.semver; }
   else { window.db = shim(); window.DB_ENGINE = 'IndexedDB (shim com API Dexie — rode scripts/get-dexie.sh para usar o Dexie real)'; }
 
   /* Preparação para sincronização (sem mudar o esquema): todo registro ganha `uid` (UUID estável entre aparelhos) e `updatedAt`;
      exclusões ficam registradas em kv:"tombstones" para serem propagadas depois. */
-  const SYNC=['profileLog','goals','weights','foods','plan','foodlog','workouts','sessions','water','habits'];
+  const SYNC=['profileLog','goals','weights','foods','plan','foodlog','workouts','sessions','water','habits','activities'];
   const uuid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&3|8).toString(16)});
   const stamp=r=>{if(r&&typeof r==='object'){r.uid=r.uid||uuid();r.updatedAt=Date.now()}};
   const db=window.db;window.SYNC_TABLES=SYNC;

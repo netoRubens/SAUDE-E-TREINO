@@ -9,13 +9,14 @@ const ymd=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(
 const add=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)};
 async function fillForm(page,vals,expectClose=true){for(const [k,v] of Object.entries(vals)){const el=page.locator(`.sheet [name="${k}"]`);const t=await el.evaluate(e=>e.tagName);if(t==='SELECT')await el.selectOption(String(v));else await el.fill(String(v))}
  await page.click('.sheet button[type=submit]');if(expectClose){await page.waitForSelector('.modal',{state:'detached',timeout:4000});await page.waitForTimeout(80)}else{await page.waitForTimeout(150);const e=await page.locator('.sheet .err').textContent();await page.click('.sheet [data-x]');return e}}
+async function skipOb(page){await page.evaluate(async()=>{for(let i=0;i<50;i++){const m=await db.kv.get('meta');if(m){await db.kv.put({...m,onboarded:true});return}await new Promise(r=>setTimeout(r,100))}});await page.reload();await page.waitForSelector('h1')}
 const go=async(page,h)=>{await page.evaluate(h=>{location.hash=h},h);await page.waitForTimeout(120)};
 const body=page=>page.locator('main').innerText();
 async function run(name,ctxOpts){
  results.push(`\n== ${name} ==`);
  const browser=await pw.chromium.launch();const ctx=await browser.newContext({acceptDownloads:true,...ctxOpts});const page=await ctx.newPage();const _c=page.click.bind(page);page.click=async(...a)=>{const r=await _c(...a);await page.waitForTimeout(150);return r};
  const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/404/.test(m.text())&&!/vendor\/dexie/.test(m.location().url))errs.push(m.text()+' @'+m.location().url)});
- const base='http://localhost:8123/index.html';await page.goto(base);await page.waitForSelector('h1');
+ const base='http://localhost:8123/index.html';await page.goto(base);await page.waitForSelector('h1');await skipOb(page);
  const mobile=!!ctxOpts.isMobile;
  ok(await page.locator(mobile?'#tabs':'#side').isVisible()&&!await page.locator(mobile?'#side':'#tabs').isVisible(),mobile?'navegação inferior (mobile) visível, lateral oculta':'navegação lateral (desktop) visível, inferior oculta');
  // Seed da planilha

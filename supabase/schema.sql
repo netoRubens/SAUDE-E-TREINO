@@ -4,9 +4,9 @@
 -- 1) Dados do app (perfil, metas, peso, dieta, treinos, água, passos, hábitos...) — um registro por linha.
 create table public.records (
   user_id    uuid        not null default auth.uid() references auth.users(id) on delete cascade,
-  tbl        text        not null check (tbl in ('kv','profileLog','goals','weights','foods','plan','foodlog','workouts','sessions','water','steps','habits','habitlog')),
+  tbl        text        not null check (tbl in ('kv','profileLog','goals','weights','foods','plan','foodlog','workouts','sessions','water','steps','habits','habitlog','activities')),
   uid        text        not null check (char_length(uid) between 1 and 64),
-  data       jsonb       not null check (pg_column_size(data) < 200000),
+  data       jsonb       not null check (pg_column_size(data) < 1000000),
   updated_at timestamptz not null,
   deleted    boolean     not null default false,
   primary key (user_id, tbl, uid)

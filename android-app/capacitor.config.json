@@ -1,0 +1,7 @@
+{
+  "appId": "br.com.satori.app",
+  "appName": "Satori",
+  "webDir": "www",
+  "backgroundColor": "#09090b",
+  "server": { "androidScheme": "https" }
+}

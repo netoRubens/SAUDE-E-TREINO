@@ -51,3 +51,15 @@ O service worker usa *rede primeiro*: ao publicar uma versão nova, o app a carr
 **Como funciona:** Perfil e metas › *Conta e sincronização* › Entrar / Criar conta. A 1ª sincronização de cada aparelho é manual e pede confirmação; depois é automática após cada alteração (com internet). Conflito = vence a alteração mais recente (relógios dos aparelhos devem estar certos). Exclusões são propagadas. Tokens e cursor de sincronização ficam fora do backup JSON.
 **Testes:** `npm run test:sync` (usa um Supabase *simulado*; o servidor real não foi exercitado).
 **Limite conhecido:** "Apagar tudo" apaga só o aparelho local (não gera exclusões na nuvem).
+
+## Gerar o APK (Android) — sem instalar nada no seu computador
+O APK é compilado de graça pelo GitHub Actions (este ambiente de desenvolvimento não tem Android SDK).
+1. Coloque **esta pasta como raiz** de um repositório no GitHub (a pasta `.github/` precisa ficar na raiz).
+2. No Supabase › SQL Editor, rode `supabase/migration-002-corridas.sql` (uma vez) para as corridas sincronizarem.
+3. GitHub › aba **Actions** › **Gerar APK Android** › **Run workflow** (deixe "usar_dexie" desmarcado nesta versão).
+4. Espere ~10–15 min. O APK aparece em **Releases** (`satori-v0.5.0-bNN.apk`) e em *Artifacts*. Abra o link da Release **no celular**, baixe e instale (autorize "instalar apps desconhecidos" para o navegador).
+5. Siga `ROTEIRO-TESTE-CELULAR.md` e me diga o resultado. Cada nova compilação gera um número `bNN` maior.
+O APK é assinado com a chave de *debug* (serve para instalar e testar no seu celular). Uma versão "release" com chave própria é um passo futuro.
+
+## Testes
+`npm run test:all` (motor de corrida, app, sincronização, cadastro, corrida e consistência de versão).
