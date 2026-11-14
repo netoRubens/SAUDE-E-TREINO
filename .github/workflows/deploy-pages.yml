@@ -1,0 +1,34 @@
+name: Publicar site (GitHub Pages)
+# A cada push na branch principal o site é publicado de novo. O APK carrega este site,
+# então TODOS os celulares com o app recebem a versão nova na próxima abertura (grátis).
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar o site
+        run: |
+          mkdir _site
+          cp -r index.html styles.css db.js config.js sync.js app.js sw.js manifest.webmanifest core icons templates _site/
+          echo "window.SATORI_REPO='${{ github.repository }}';" >> _site/config.js
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: d
+        uses: actions/deploy-pages@v4

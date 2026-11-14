@@ -25,11 +25,14 @@ const km=async p=>parseFloat((await p.locator('.rbig').first().innerText()).repl
  const d1=await km(p);ok(d1>=0.10&&d1<=0.14,`distância ao vivo ≈ 0,12 km (mostra ${d1.toFixed(2)}): salto de 1,1 km e ponto impreciso ignorados`);
  const tm=await p.locator('.stat').nth(0).innerText();ok(/00:2\d|00:3\d/.test(tm),`cronômetro andando (${tm.replace(/\s+/g,' ')})`);
  ok((await p.evaluate(()=>window.__alerts||0))>=2,`aviso (bipe + vibração) a cada 50 m: ${await p.evaluate(()=>window.__alerts)} avisos em 120 m`);
+ {const sp=await p.evaluate(()=>window.__spoken||[]);ok(sp.length>=2&&/percorridos\. Tempo .* Ritmo .* por quilômetro/.test(sp[0]),`aviso de voz a cada trecho: “${sp[0]}”`)}
+ ok(/decorrido/i.test(await p.locator('#runlive').innerText())&&/subida/i.test(await p.locator('#runlive').innerText()),'tela ao vivo mostra tempo decorrido e subida ("--" sem altitude do GPS)');
  ok(/\/km/.test(await p.locator('#runlive').innerText())&&await p.locator('svg.route path').count()>=1,'pace atual e trajeto ao vivo (linha) na tela');
  await p.click('[data-a=runPause]');await p.waitForTimeout(200);const dp=await km(p);await mv(3);ok(await km(p)===dp&&/PAUSADA/.test(await p.locator('#runlive').innerText()),'pausada: distância congelada mesmo andando');
  await p.click('[data-a=runResume]');await mv(4);
  await p.click('[data-a=runFinish]');await p.waitForSelector('[data-y]');await p.click('[data-y]');await p.waitForSelector('[data-a=runSave]');
- const sm=await p.locator('main').innerText();ok(/Corrida concluída/i.test(sm)&&/pace médio/i.test(sm)&&/tempo/i.test(sm)&&/velocidade/i.test(sm)&&await p.locator('svg.route path').count()===1,'resumo: trajeto (linha), distância, tempo, pace médio e velocidade');
+ const sm=await p.locator('main').innerText();ok(/parciais/i.test(sm)&&/resumo da corrida|decorrido/i.test(sm),'resumo mostra parciais e tempo decorrido');
+ ok(/Corrida concluída/i.test(sm)&&/pace médio/i.test(sm)&&/tempo/i.test(sm)&&/velocidade/i.test(sm)&&await p.locator('svg.route path').count()===1,'resumo: trajeto (linha), distância, tempo, pace médio e velocidade');
  await p.click('[data-a=runSave]');await p.waitForFunction(()=>document.querySelector('h1')&&/Corrida d/.test(document.querySelector('h1').textContent),null,{timeout:5000});
  const a=await p.evaluate(async()=>(await db.activities.toArray())[0]);ok(a&&a.uid&&a.distM>=110&&a.distM<=160&&a.route.length>=3&&a.sport==='corrida'&&a.activeMs>=25000&&a.avgPaceSecKm>0,`salva: ${a.distM} m, ${Math.round(a.activeMs/1000)} s, ${a.route.length} pontos, pace ${Math.round(a.avgPaceSecKm)} s/km`);
  ok(!(await p.evaluate(async()=>await db.kv.get('runInProgress'))),'estado temporário da corrida removido após salvar');

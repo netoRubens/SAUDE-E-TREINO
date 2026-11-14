@@ -1,6 +1,6 @@
 {
   "name": "satori",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Satori — saúde, treino e hábitos (PWA local).",
   "scripts": {
@@ -10,9 +10,10 @@
     "test": "node test/e2e.cjs",
     "test:sync": "node test/sync.e2e.cjs",
     "test:core": "node test/running.test.mjs",
-    "test:all": "node test/running.test.mjs && node test/e2e.cjs && node test/sync.e2e.cjs && node test/onboarding.e2e.cjs && node test/run.e2e.cjs && node scripts/check-version.mjs",
+    "test:all": "node test/running.test.mjs && node test/analysis.test.mjs && node test/e2e.cjs && node test/sync.e2e.cjs && node test/onboarding.e2e.cjs && node test/run.e2e.cjs && node test/run2.e2e.cjs && node scripts/check-version.mjs",
     "test:onboarding": "node test/onboarding.e2e.cjs",
-    "test:run": "node test/run.e2e.cjs"
+    "test:run": "node test/run.e2e.cjs",
+    "test:analysis": "node test/analysis.test.mjs"
   },
   "engines": {
     "node": ">=18"

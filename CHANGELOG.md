@@ -2,6 +2,21 @@
 
 > Cada versão tem número (`MAIOR.MENOR.CORREÇÃO`). A versão aparece no app em **Perfil e metas → Versão do app** e no nome do APK (`satori-v0.5.0-b12.apk`, onde `b12` é o número da compilação).
 
+## [0.6.0] — 12/11/2026
+**Corrida — recursos inspirados no Strava (todos gratuitos e calculados no aparelho)**
+- **Parciais por km** com barras, ritmo e **RAI** (ritmo ajustado à inclinação, modelo de Minetti) e desnível.
+- **Elevação**: subida e descida com filtro de ruído do GPS (se o GPS não informar altitude, mostra "--").
+- **Tempo em movimento × decorrido**, pace atual e médio, pausa automática.
+- **Aviso de voz** (pt-BR) a cada trecho com tempo e ritmo, além do bipe/vibração/notificação.
+- **Recordes pessoais** (1 km, 5 km, 10 km, meia maratona e maratona) e **previsão de tempos** (Riegel).
+- **Zonas de ritmo** a partir do ritmo de limiar (estimado ou definido por você) e **forma, fadiga e frescor** (estimativa).
+- **Resumo automático** pós-corrida (negative split, km mais rápido, recordes, comparação com a média).
+- **Equipamento**: tênis com quilometragem e aviso de desgaste. **Planos de treino** (5 km e 10 km).
+- **GPX**: exportar corridas, importar como corrida ou como **rota para seguir** (linha tracejada + distância restante).
+- **Mapa de calor pessoal**.
+**Atualização automática**: o GitHub Pages publica o site a cada push; o APK carrega o site publicado, então todos os celulares recebem a versão nova ao abrir o app. Mudanças nativas geram um APK novo, e o app avisa quando houver. Chave de assinatura fixa: o APK novo instala por cima do antigo.
+**Fora desta versão (dependem de serviços externos ou hardware)**: mapa de ruas, criador/sugestão automática de rotas, mapas offline, Beacon de segurança, relógios (Garmin/Apple Watch) e cinta cardíaca, mapa de calor da comunidade.
+
 ## [0.5.0] — 11/11/2026
 **Novo**
 - **Cadastro inicial por perguntas** (uma por tela, estilo Yazio): conta, nome, objetivo, sexo, nascimento, altura, peso, peso desejado e ritmo, atividade, experiência, treinos por semana, limitações, alergias e resumo com meta de calorias e macros.

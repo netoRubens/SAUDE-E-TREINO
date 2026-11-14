@@ -36,7 +36,7 @@
   const stamp=r=>{if(r&&typeof r==='object'){r.uid=r.uid||uuid();r.updatedAt=Date.now()}};
   const db=window.db;window.SYNC_TABLES=SYNC;
   const tomb=async(t,uid,key)=>{const cur=(await db.kv.get('tombstones'))?.items||[];cur.push({t,uid,key,at:Date.now()});await db.kv.put({key:'tombstones',items:cur.slice(-5000)})};
-  const KVSYNC=['profile','settings','mealTemplates'],KEYED=['steps','habitlog'];window.KVSYNC=KVSYNC;
+  const KVSYNC=['profile','settings','mealTemplates','gear','runPlan','routes'],KEYED=['steps','habitlog'];window.KVSYNC=KVSYNC;
   for(const t of db.tables){
     if(t.name==='kv'){const op=t.put.bind(t);t.raw={put:op,get:t.get.bind(t),delete:t.delete.bind(t)};t.put=r=>{if(r&&KVSYNC.includes(r.key))r.updatedAt=Date.now();return op(r)};continue}
     const sync=SYNC.includes(t.name),keyed=KEYED.includes(t.name),o={add:t.add.bind(t),put:t.put.bind(t),del:t.delete.bind(t),get:t.get.bind(t)};

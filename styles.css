@@ -77,3 +77,6 @@ svg.route{width:100%;height:auto;display:block;border-radius:12px;background:var
 .startbtn{width:100%;min-height:68px;font-size:1.5rem;font-weight:800;border-radius:99px;margin:16px 0 8px}
 .wk{display:flex;gap:8px;align-items:flex-end;height:96px;margin-top:12px}.wk>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px}.wk i{width:100%;max-width:26px;border-radius:8px;background:color-mix(in srgb,var(--tx) 18%,transparent)}.wk i.on{background:var(--ac)}
 @media(max-width:380px){.stats{grid-template-columns:1fr 1fr}}
+
+.seg{display:flex;gap:6px;background:var(--s1);border:1px solid var(--ln);border-radius:14px;padding:4px;margin:6px 0 14px}.seg button{flex:1;min-height:42px;border:0;border-radius:11px;background:transparent;color:var(--mu);font:600 .86rem inherit;font-family:inherit;cursor:pointer}.seg button[aria-selected=true]{background:var(--ac);color:var(--acx)}
+table.spl td,table.spl th{padding:7px 4px;font-size:.88rem}

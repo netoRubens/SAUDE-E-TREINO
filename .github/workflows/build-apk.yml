@@ -2,6 +2,14 @@ name: Gerar APK Android
 on:
   workflow_dispatch:
     inputs:
+      atualizacao_automatica:
+        description: 'Atualização automática: o app carrega o site publicado (GitHub Pages). Desmarque para embutir tudo no APK.'
+        type: boolean
+        default: true
+      site_url:
+        description: 'URL do site (opcional). Vazio = https://SEU-USUARIO.github.io/SEU-REPOSITORIO/'
+        type: string
+        default: ''
       usar_dexie:
         description: 'Usar o Dexie.js real (false = substituto compatível, o motor testado nesta versão)'
         type: boolean
@@ -26,12 +34,20 @@ jobs:
         run: npm install --legacy-peer-deps
       - name: Montar o projeto Android
         working-directory: android-app
-        env: { BUILD_NUMBER: '${{ github.run_number }}' }
+        env:
+          BUILD_NUMBER: '${{ github.run_number }}'
+          AUTO: '${{ inputs.atualizacao_automatica }}'
+          SITE_URL: '${{ inputs.site_url }}'
+          OWNER: '${{ github.repository_owner }}'
+          NAME: '${{ github.event.repository.name }}'
         run: |
           node scripts/build-www.mjs
+          node scripts/configure-source.mjs
           npx cap add android
           node scripts/patch-android.mjs
           npx cap sync android
+      - name: Usar a chave de assinatura fixa (permite atualizar o app sem desinstalar)
+        run: mkdir -p ~/.android && cp android-app/debug.keystore ~/.android/debug.keystore
       - name: Compilar o APK
         working-directory: android-app/android
         run: ./gradlew assembleDebug --no-daemon

@@ -5,12 +5,15 @@ const R=6371008.8,rad=d=>d*Math.PI/180;
 export const haversine=(a,b)=>{const h=Math.sin(rad(b.lat-a.lat)/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(rad(b.lon-a.lon)/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
 export function createTracker(opts={},init=null){
   const c={...CFG,autoPause:true,...opts};
-  const s=init?structuredClone(init):{id:opts.id??null,status:'idle',pts:[],pauses:[],dist:0,rej:{acc:0,speed:0,order:0,invalid:0},gapMs:0,startT:null,endT:null,anchor:null,lastMoveT:null};
+  const s=init?structuredClone(init):{id:opts.id??null,status:'idle',pts:[],pauses:[],dist:0,rej:{acc:0,speed:0,order:0,invalid:0},gapMs:0,startT:null,endT:null,anchor:null,lastMoveT:null,gain:0,loss:0,altF:null,altRef:null,hasAlt:false};
+  s.gain=s.gain||0;s.loss=s.loss||0;
   const open=()=>s.pauses.find(p=>p.end==null),autoOpen=()=>open()?.kind==='auto';
   const closeAuto=t=>{if(autoOpen())open().end=t};
   const pausedMs=t=>s.pauses.reduce((a,p)=>a+Math.max(0,Math.min(p.end??t,t)-p.start),0);
   const activeAt=t=>Math.max(0,t-s.startT-pausedMs(t));
-  const push=(p,brk=false)=>s.pts.push({t:p.t,lat:p.lat,lon:p.lon,cum:s.dist,act:activeAt(p.t),...(brk?{brk:1}:{})});
+  /* Elevação: média móvel + histerese de 3 m (ignora o ruído do GPS). Sem altitude no GPS → ganho = null (não inventa). */
+  const track=p=>{if(Number.isFinite(p.alt)&&!(p.altAcc>30)){s.altF=s.altF==null?p.alt:s.altF+0.25*(p.alt-s.altF);if(s.altRef==null)s.altRef=s.altF;const df=s.altF-s.altRef;if(df>=3){s.gain+=df;s.altRef=s.altF}else if(df<=-3){s.loss-=df;s.altRef=s.altF}s.hasAlt=true}};
+  const push=(p,brk=false)=>{track(p);s.pts.push({t:p.t,lat:p.lat,lon:p.lon,cum:s.dist,act:activeAt(p.t),...(s.altF!=null?{alt:Math.round(s.altF*10)/10}:{}),...(brk?{brk:1}:{})})};
   const pin=(p)=>({lat:p.lat,lon:p.lon,t:p.t,seen:p.t});
   return{
     start(t){if(s.status!=='idle')return;s.status='running';s.startT=t;s.lastMoveT=t},
@@ -35,7 +38,7 @@ export function createTracker(opts={},init=null){
     snapshot(now){
       const end=s.status==='finished'?s.endT:now,act=s.startT==null?0:activeAt(end),km=s.dist/1000,L=s.pts[s.pts.length-1];let paceNow=null;
       if(L&&s.status==='running'&&!autoOpen()&&now-L.t<=15000){let B=s.pts[0];for(const q of s.pts){if(q.t<=L.t-c.paceWinMs)B=q;else break}const dd=L.cum-B.cum,da=(L.act-B.act)/1000;if(dd>=10&&da>0)paceNow=da/(dd/1000)}
-      return{id:s.id,status:s.status,autoPaused:autoOpen(),distM:s.dist,activeMs:act,avgPaceSecKm:s.dist>=10?act/1000/km:null,avgKmh:s.dist>=10&&act>0?km/(act/3.6e6):null,paceNowSecKm:paceNow,gapMs:s.gapMs,rejected:{...s.rej},points:s.pts.length}},
-    route:()=>s.pts.map(({t,lat,lon,brk})=>({t,lat,lon,...(brk?{brk:1}:{})})),
+      return{id:s.id,status:s.status,autoPaused:autoOpen(),distM:s.dist,activeMs:act,avgPaceSecKm:s.dist>=10?act/1000/km:null,avgKmh:s.dist>=10&&act>0?km/(act/3.6e6):null,paceNowSecKm:paceNow,gapMs:s.gapMs,rejected:{...s.rej},points:s.pts.length,elapsedMs:s.startT==null?0:end-s.startT,gainM:s.hasAlt?s.gain:null,lossM:s.hasAlt?s.loss:null}},
+    route:()=>s.pts.map(p=>({...p})),
     toJSON:()=>structuredClone(s)}}  // persistir periodicamente → recuperação: createTracker(opts, estadoSalvo)
 export const restoreTracker=(state,opts)=>createTracker(opts,state);
