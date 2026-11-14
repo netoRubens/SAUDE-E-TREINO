@@ -21,10 +21,12 @@
    - Se o `push` recusar com *"refusing to allow ... to create or update workflow"*: o seu token não tem a permissão `workflow`. Gere um token novo em GitHub → Settings → Developer settings → Personal access tokens, marcando **repo** e **workflow**, ou use o GitHub Desktop.
    - Já tem um repositório com a versão antiga? Apague os arquivos antigos, copie os novos por cima (inclusive a pasta oculta `.github`) e faça `git add . && git commit && git push`.
 
-## Parte 2 — Ligar o GitHub Pages (uma vez)
-1. No repositório: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-2. Aba **Actions** → se aparecer um aviso, clique em *"I understand my workflows, go ahead and enable them"*.
-3. Escolha **Publicar site (GitHub Pages)** → **Run workflow**. Em ~1 minuto fica verde e mostra o endereço do site. Abra e confira.
+## Parte 2 — Endereço do site (escolha UMA opção)
+**Opção A — GitHub Pages (grátis):**
+1. Repositório → **Settings → Pages → Build and deployment → Source: GitHub Actions**. (Em conta gratuita o Pages só funciona com repositório **público**: Settings → General → Danger Zone → *Change visibility* → Public. O código não tem segredos: a chave do Supabase é pública por design.)
+2. Aba **Actions** → **Publicar site (GitHub Pages)** → **Run workflow**. Espere ficar verde: ele mostra o endereço do site.
+**Opção B — usar o site que você já tem na Vercel:** não precisa de Pages. Na Parte 4, preencha `site_url` com o endereço (ex.: `https://seu-app.vercel.app/`). Cada `git push` já atualiza a Vercel sozinha.
+*(Opcional na opção B)* Abra `config.js` e acrescente `window.SATORI_REPO='SEU-USUARIO/satori';` para o app avisar quando houver APK novo.
 
 ## Parte 3 — Supabase (uma vez)
 No Supabase → **SQL Editor** → cole e execute `supabase/migration-002-corridas.sql` (para as corridas sincronizarem).
@@ -50,7 +52,8 @@ No Supabase → **SQL Editor** → cole e execute `supabase/migration-002-corrid
 ## Problemas comuns
 | Sintoma | O que fazer |
 |---|---|
-| Passo "Configurar origem" falha dizendo que não abriu o site | Faça a Parte 2 (Pages) e rode "Publicar site"; ou preencha `site_url` (ex.: seu domínio da Vercel). |
+| Passo "Montar o projeto Android" falha com "NÃO CONSEGUI ABRIR O SITE" | Faça a Parte 2 (Pages público **ou** `site_url` da Vercel). |
+| "Get Pages site failed ... Not Found" | O Pages não está habilitado (Source = GitHub Actions) ou o repositório é privado em conta gratuita. |
 | O app abre em branco | Rode o APK de novo com **atualizacao_automatica desmarcada** (modo embutido) e me avise. |
 | "App não instalado" | Provavelmente existe uma versão antiga com outra assinatura: desinstale (faça backup/sincronize antes) e instale de novo. |
 | Corrida para quando bloqueio a tela | Localização "Permitir o tempo todo" + bateria "Sem restrições". |
