@@ -31,28 +31,35 @@ jobs:
         run: sh scripts/get-dexie.sh
       - name: Instalar dependências do app Android
         working-directory: android-app
-        run: npm install --legacy-peer-deps
-      - name: Montar o projeto Android
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "Instalar dependências (npm install)" npm install --legacy-peer-deps
+      - name: "1/5 Preparar os arquivos do site"
+        working-directory: android-app
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "1/5 Preparar os arquivos" node scripts/build-www.mjs
+      - name: "2/5 Definir de onde o app carrega o conteúdo"
         working-directory: android-app
         env:
-          BUILD_NUMBER: '${{ github.run_number }}'
           AUTO: '${{ inputs.atualizacao_automatica }}'
           SITE_URL: '${{ inputs.site_url }}'
           OWNER: '${{ github.repository_owner }}'
           NAME: '${{ github.event.repository.name }}'
-        run: |
-          node scripts/build-www.mjs
-          node scripts/configure-source.mjs
-          npx cap add android
-          node scripts/patch-android.mjs
-          npx cap sync android
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "2/5 Origem do conteúdo (site_url)" node scripts/configure-source.mjs
+      - name: "3/5 Criar o projeto Android"
+        working-directory: android-app
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "3/5 cap add android" npx cap add android
+      - name: "4/5 Ajustar permissões, versão e ícone"
+        working-directory: android-app
+        env: { BUILD_NUMBER: '${{ github.run_number }}' }
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "4/5 Ajustes do Android" node scripts/patch-android.mjs
+      - name: "5/5 Sincronizar plugins"
+        working-directory: android-app
+        run: sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "5/5 cap sync" npx cap sync android
       - name: Usar a chave de assinatura fixa (permite atualizar o app sem desinstalar)
         run: mkdir -p ~/.android && cp android-app/debug.keystore ~/.android/debug.keystore
       - name: Compilar o APK
         working-directory: android-app/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          sh "$GITHUB_WORKSPACE/scripts/ci-step.sh" "Gradle (compilar APK)" ./gradlew assembleDebug --no-daemon
       - name: Nomear o APK e calcular o checksum
         id: n
         run: |
